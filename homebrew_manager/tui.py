@@ -222,15 +222,29 @@ class HomebruApp(App[None]):
 
     Screen { background: $paper; color: $ink; }
     #app-shell { height: 100%; padding: 1 3 0 3; background: $paper; }
-    #masthead { height: 10; padding: 0; }
-    #brand { width: 1fr; content-align: left middle; }
-    #brand-logo { height: 6; color: $accent; text-style: bold; }
-    #brand-subtitle { height: 2; color: $muted; margin-top: 1; }
+    #masthead { height: 10; padding: 0; align-horizontal: center; }
+    #brand { width: 100%; height: 9; align-horizontal: center; }
+    #brand-logo {
+        width: 100%;
+        height: 6;
+        color: $accent;
+        text-style: bold;
+        content-align: center middle;
+        text-align: center;
+    }
+    #brand-subtitle {
+        width: 100%;
+        height: 2;
+        margin-top: 1;
+        color: $muted;
+        content-align: center middle;
+        text-align: center;
+    }
     #connection-state {
-        width: auto;
+        width: 100%;
         height: 1;
         padding: 0 1;
-        content-align: right top;
+        content-align: center top;
         background: $paper;
         color: $muted;
     }
@@ -248,12 +262,22 @@ class HomebruApp(App[None]):
         height: 2;
         color: $accent;
         text-style: bold;
+        content-align: center middle;
+        text-align: center;
     }
     #welcome-note, #template-picker-note, #local-setup-note,
-    #custom-setup-note, #connection-note { height: 2; color: $muted; }
+    #custom-setup-note, #connection-note {
+        height: 2;
+        color: $muted;
+        content-align: center middle;
+        text-align: center;
+    }
     #welcome-server-actions, #welcome-setup-actions, #template-picker-actions,
-    #local-setup-actions, #custom-setup-actions { height: 3; align-horizontal: left; }
-    .template-row { height: 3; align-horizontal: left; }
+    #local-setup-actions, #custom-setup-actions, #connection-actions, #service-actions {
+        height: 3;
+        align-horizontal: center;
+    }
+    .template-row { height: 3; align-horizontal: center; }
     .setup-instructions { height: 3; color: $muted; }
     .connection-row { height: 3; }
     .connection-label { width: 14; height: 1; color: $muted; content-align: left middle; }
@@ -268,7 +292,6 @@ class HomebruApp(App[None]):
     .connection-input:focus { border: none; background: #151515; }
     #connection-error { height: 1; color: $bad; }
     #local-setup-error, #custom-setup-error { height: 1; color: $bad; }
-    #connection-actions { height: 3; align-horizontal: right; }
     #content-scroll { height: 1fr; scrollbar-color: #505050; scrollbar-background: $paper; }
     #summary { height: auto; layout: grid; grid-size: 1 3; grid-gutter: 0; margin: 0 0 1 0; }
     .metric-card {
@@ -289,7 +312,7 @@ class HomebruApp(App[None]):
     #service-table { height: auto; min-height: 5; max-height: 14; background: $paper; }
     DataTable > .datatable--header { background: $paper; color: $muted; text-style: bold; }
     DataTable > .datatable--cursor { background: #202020; color: $ink; }
-    #service-actions { height: 3; padding-top: 0; align-horizontal: right; }
+    #service-actions { padding-top: 0; }
     Button { min-width: 12; height: 1; margin-left: 1; background: $paper; color: $muted; border: none; }
     Button:hover { background: #202020; color: $ink; }
     #stop { color: $bad; }
@@ -349,14 +372,14 @@ class HomebruApp(App[None]):
             id="app-shell",
         )
 
-    def _build_masthead(self) -> Horizontal:
+    def _build_masthead(self) -> Vertical:
         brand = Vertical(
             Static(ASCII_LOGO, id="brand-logo", markup=False),
             Static("Server manager made easy for PCs.\nType /help to list commands.", id="brand-subtitle"),
             id="brand",
         )
         connection_label = "Saved server" if self.config else "Not connected"
-        return Horizontal(brand, Static(connection_label, id="connection-state"), id="masthead")
+        return Vertical(brand, Static(connection_label, id="connection-state"), id="masthead")
 
     def _build_home_panel(self) -> Vertical:
         saved_server = (

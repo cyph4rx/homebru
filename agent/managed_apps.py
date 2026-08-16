@@ -67,6 +67,13 @@ def get_status(app: dict, runtime_dir: Path) -> dict:
     }
 
 
+def has_manageable_target(app: dict, runtime_dir: Path) -> bool:
+    """Return whether the app still has files or a tracked running process."""
+    if Path(app["cwd"]).is_dir():
+        return True
+    return _find_running_process(app, runtime_dir) is not None
+
+
 def _launch_managed_process(
     app: dict,
     working_directory: Path,

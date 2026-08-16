@@ -140,6 +140,8 @@ def list_services(
 
     state_dir = _runtime_directory(runtime_dir)
     for app_config in managed_apps or []:
+        if not app_manager.has_manageable_target(app_config, state_dir):
+            continue
         try:
             service_statuses.append(app_manager.get_status(app_config, state_dir))
         except app_manager.ManagedAppError as exc:

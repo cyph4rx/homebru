@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, DataTable, Input
 
 from homebrew_manager.config import ServerConfig
@@ -9,6 +9,17 @@ from homebrew_manager.tui import HomebruApp
 
 
 class TuiSmokeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_home_action_buttons_stay_centered_at_narrow_width(self):
+        app = HomebruApp(None, Path.cwd() / "unused-config.json", save_connection=False)
+
+        async with app.run_test(size=(90, 32)) as pilot:
+            await pilot.pause()
+            action_row = app.query_one("#welcome-setup-actions", Horizontal)
+            buttons = list(action_row.query(Button))
+            button_group_center = (buttons[0].region.x + buttons[-1].region.right) / 2
+            row_center = action_row.region.x + action_row.region.width / 2
+            self.assertAlmostEqual(button_group_center, row_center, delta=1)
+
     async def test_command_autocomplete_completes_commands_and_service_names(self):
         app = HomebruApp(None, Path.cwd() / "unused-config.json", save_connection=False)
 

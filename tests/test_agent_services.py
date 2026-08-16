@@ -61,6 +61,20 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result[0]["active_state"], "error")
         self.assertEqual(result[1]["name"], "docker")
 
+    @patch.object(services.app_manager, "get_status", return_value={"name": "present"})
+    @patch.object(services.app_manager, "has_manageable_target", side_effect=[False, True])
+    def test_deleted_managed_app_is_hidden(self, has_target, get_status):
+        managed_apps = [
+            {"name": "deleted", "cwd": "missing"},
+            {"name": "present", "cwd": "present"},
+        ]
+
+        result = services.list_services([], managed_apps, "runtime")
+
+        self.assertEqual(result, [{"name": "present"}])
+        self.assertEqual(has_target.call_count, 2)
+        get_status.assert_called_once_with(managed_apps[1], Path("runtime"))
+
 
 if __name__ == "__main__":
     unittest.main()

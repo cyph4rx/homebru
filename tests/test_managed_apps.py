@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 AGENT_DIR = Path(__file__).parents[1] / "agent"
 if str(AGENT_DIR) not in sys.path:
@@ -10,6 +11,14 @@ import managed_apps  # noqa: E402
 
 
 class ManagedAppTests(unittest.TestCase):
+    @patch.object(managed_apps, "_find_running_process", return_value=None)
+    def test_missing_working_directory_has_no_manageable_target(self, find_process):
+        app = {"name": "deleted", "cwd": str(Path(__file__).parent / "fixtures" / "missing")}
+        runtime = Path(__file__).parent / "fixtures" / "runtime"
+
+        self.assertFalse(managed_apps.has_manageable_target(app, runtime))
+        find_process.assert_called_once_with(app, runtime)
+
     def test_start_status_and_stop(self):
         cwd = Path(__file__).parent / "fixtures" / "managed_app"
         runtime = Path(__file__).parent / "fixtures" / "runtime"
@@ -32,4 +41,3 @@ class ManagedAppTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
