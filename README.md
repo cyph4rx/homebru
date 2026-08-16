@@ -45,7 +45,7 @@ Run `homebru` and you'll land on a home screen with three options:
 - **Create from scratch** — point Homebru at a folder and a start command
   for a server you already have, or want to build yourself. The form walks
   you through it with instructions and examples.
-  **Connect to an existing server** — hook up to a different Windows or
+- **Connect to an existing server** — hook up to a different Windows or
   Linux machine by entering its IP, port, and agent token.
 
 Once youve saved a connection, an **Open saved server** button shows up there too.
@@ -115,14 +115,3 @@ Run `homebru --help` to see everything else you can pass in.
 | Refresh now | `/refresh` |
 | Show help | `/help` |
 | Quit | `Ctrl+C` or `/quit` |
-
-## Development checks
-
-```powershell
-python -m pip install -e ".[test]"
-python -m unittest discover -s tests -v
-python -m compileall homebrew_manager agent
-```
-
-These cover the local code and mocked API behavior. Actual service control
-and hardware reporting still need to be checked against your real machines.
