@@ -54,16 +54,16 @@ anytime with the **Home** button or `/home`.
 
 Local templates handle the install/setup for you, start the local Homebru
 agent, and connect the dashboard automatically. The Minecraft template
-won't download the proprietary server files or accept the EULA for you —
+won't download the proprietary server files or accept the EULA for you,
 its generated `README.txt` walks you through adding `server.jar` and
 finishing setup yourself. The Node.js template needs Node.js already
 installed.
 
-The Discord token is optional while setting up — leave it blank and just
+The Discord token is optional while setting up. leave it blank and just
 add it to the generated `.env` file before starting the bot. Check
 [`agent/README.txt`](agent/README.txt) for the Discord Developer Portal steps.
 
-Setting up a remote computer? Copy the `agent/` folder over to it and follow
+Setting up a **remote computer?** Copy the `agent/` folder over to it and follow
 the short headless setup in [`agent/README.txt`](agent/README.txt), then pick
 **Connect to an existing server** back in Homebru. Keep the agent on a
 trusted private network — don't expose port `8420` directly to the public
@@ -104,6 +104,9 @@ Run `homebru --help` to see everything else you can pass in.
 
 | Action | How |
 |---|---|
+| Browse command suggestions | Type `/` or start typing a slash command |
+| Choose and complete a suggestion | Use `Up` / `Down`, then press `Tab` |
+| Complete a service name | Type `/start `, `/stop `, or `/restart ` and begin typing its name |
 | Select a service | Arrow keys or mouse, then use the action buttons |
 | Focus the command input | `Esc` |
 | Start / stop / restart the selected service | `/start`, `/stop`, `/restart` |

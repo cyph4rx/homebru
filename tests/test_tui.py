@@ -9,6 +9,34 @@ from homebrew_manager.tui import HomebruApp
 
 
 class TuiSmokeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_command_autocomplete_completes_commands_and_service_names(self):
+        app = HomebruApp(None, Path.cwd() / "unused-config.json", save_connection=False)
+
+        async with app.run_test(size=(120, 40)) as pilot:
+            command_input = app.query_one("#command", Input)
+            command_input.focus()
+            command_input.value = "/st"
+            await pilot.pause()
+
+            self.assertEqual(
+                [option.value for option in app.command_suggestions],
+                ["/start ", "/stop "],
+            )
+            await pilot.press("down", "tab")
+            self.assertEqual(command_input.value, "/stop ")
+
+            app.service_names = ["docker", "nginx"]
+            command_input.value = "/start d"
+            await pilot.pause()
+            self.assertEqual([option.value for option in app.command_suggestions], ["/start docker"])
+            await pilot.press("tab")
+            self.assertEqual(command_input.value, "/start docker")
+
+            command_input.value = "/ref"
+            await pilot.pause()
+            await pilot.press("enter")
+            self.assertEqual(command_input.value, "/refresh")
+
     async def test_screen_mounts_and_renders_agent_data(self):
         config = ServerConfig(host="127.0.0.1", port=9, token="test", request_timeout=1)
         config_path = Path.cwd() / "homebrew-tui-test.json"

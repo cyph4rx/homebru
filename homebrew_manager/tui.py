@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from textual import on, work
+from rich.text import Text
+from textual import events, on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
@@ -39,6 +40,13 @@ class TemplateForm:
     option_placeholder: str
     summary: str
     instructions: str
+
+
+@dataclass(frozen=True, slots=True)
+class AutocompleteOption:
+    value: str
+    label: str
+    description: str
 
 
 SERVER_TEMPLATES = {
@@ -95,10 +103,51 @@ NAVIGATION_PANEL_IDS = (
     "#connection-panel",
 )
 
+COMMAND_AUTOCOMPLETE_OPTIONS = (
+    AutocompleteOption("/start ", "/start [service]", "Start a service"),
+    AutocompleteOption("/stop ", "/stop [service]", "Stop a service"),
+    AutocompleteOption("/restart ", "/restart [service]", "Restart a service"),
+    AutocompleteOption("/refresh", "/refresh", "Refresh server data"),
+    AutocompleteOption("/home", "/home", "Return to the home screen"),
+    AutocompleteOption("/setup", "/setup", "Browse server templates"),
+    AutocompleteOption("/custom", "/custom", "Create a server from scratch"),
+    AutocompleteOption("/connect", "/connect", "Change server connection"),
+    AutocompleteOption("/help", "/help", "Show available commands"),
+    AutocompleteOption("/quit", "/quit", "Exit Homebru"),
+)
+SERVICE_COMMANDS = frozenset({"/start", "/stop", "/restart"})
+MAX_VISIBLE_AUTOCOMPLETE_OPTIONS = 6
+
 HELP_TEXT = (
     "Commands: /start [service]  /stop [service]  /restart [service]  "
     "/refresh  /home  /setup  /custom  /connect  /quit"
 )
+
+
+def _autocomplete_options(input_value: str, service_names: list[str]) -> list[AutocompleteOption]:
+    typed_value = input_value.lstrip()
+    if not typed_value.startswith("/"):
+        return []
+
+    command, separator, argument = typed_value.partition(" ")
+    command = command.casefold()
+    if separator:
+        if command not in SERVICE_COMMANDS:
+            return []
+        service_prefix = argument.lstrip().casefold()
+        action = command.removeprefix("/").title()
+        return [
+            AutocompleteOption(f"{command} {service_name}", service_name, f"{action} service")
+            for service_name in dict.fromkeys(service_names)
+            if service_name.casefold().startswith(service_prefix)
+        ]
+
+    command_prefix = typed_value.casefold()
+    return [
+        option
+        for option in COMMAND_AUTOCOMPLETE_OPTIONS
+        if option.value.rstrip().casefold().startswith(command_prefix)
+    ]
 
 
 def _format_percent_meter(percent: object, width: int = 26) -> str:
@@ -250,6 +299,14 @@ class HomebruApp(App[None]):
     #command { width: 1fr; height: 1; border: none; background: $paper; color: $ink; padding: 0; }
     #command:focus { border: none; }
     #hint { width: auto; height: 1; content-align: right middle; color: $muted; }
+    #command-suggestions {
+        height: auto;
+        max-height: 8;
+        padding: 0 2;
+        background: $paper;
+        color: $muted;
+        border: solid $line;
+    }
     #message-line { height: 1; padding: 0 1; color: $muted; }
     #message-line.error { color: $bad; }
     #message-line.active { color: $ink; }
@@ -274,6 +331,8 @@ class HomebruApp(App[None]):
         self.setup_in_progress = False
         self.selected_template_id = "discord-bot"
         self.dashboard_open = False
+        self.command_suggestions: list[AutocompleteOption] = []
+        self.selected_suggestion_index = 0
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -285,6 +344,7 @@ class HomebruApp(App[None]):
             self._build_connection_form(),
             self._build_dashboard(),
             Static("Ready", id="message-line"),
+            Static("", id="command-suggestions", classes="hidden"),
             self._build_command_bar(),
             id="app-shell",
         )
@@ -503,8 +563,8 @@ class HomebruApp(App[None]):
     def _build_command_bar(self) -> Horizontal:
         return Horizontal(
             Static(">", id="prompt"),
-            Input(placeholder="Type /help or a command", id="command"),
-            Static("Esc: input | Ctrl+R: refresh | Ctrl+C: quit", id="hint"),
+            Input(placeholder="Type / to browse commands", id="command"),
+            Static("Tab: complete | ↑↓: choose | Ctrl+C: quit", id="hint"),
             id="composer-wrap",
         )
 
@@ -909,9 +969,87 @@ class HomebruApp(App[None]):
     def on_custom_form_submitted(self) -> None:
         self._register_custom_server()
 
+    @on(Input.Changed, "#command")
+    def on_command_changed(self, event: Input.Changed) -> None:
+        self._update_command_suggestions(event.value)
+
+    def on_key(self, event: events.Key) -> None:
+        command_input = self.query_one("#command", Input)
+        if not command_input.has_focus or not self.command_suggestions:
+            return
+        if event.key == "up":
+            event.stop()
+            event.prevent_default()
+            self.selected_suggestion_index = (self.selected_suggestion_index - 1) % len(self.command_suggestions)
+            self._render_command_suggestions()
+        elif event.key == "down":
+            event.stop()
+            event.prevent_default()
+            self.selected_suggestion_index = (self.selected_suggestion_index + 1) % len(self.command_suggestions)
+            self._render_command_suggestions()
+        elif event.key == "tab":
+            event.stop()
+            event.prevent_default()
+            self._complete_selected_suggestion()
+
+    def _update_command_suggestions(self, input_value: str) -> None:
+        self.command_suggestions = _autocomplete_options(input_value, self.service_names)
+        self.selected_suggestion_index = 0
+        self._render_command_suggestions()
+
+    def _render_command_suggestions(self) -> None:
+        suggestion_list = self.query_one("#command-suggestions", Static)
+        if not self.command_suggestions:
+            suggestion_list.update("")
+            suggestion_list.add_class("hidden")
+            return
+
+        last_window_start = max(len(self.command_suggestions) - MAX_VISIBLE_AUTOCOMPLETE_OPTIONS, 0)
+        window_start = min(
+            max(self.selected_suggestion_index - MAX_VISIBLE_AUTOCOMPLETE_OPTIONS + 1, 0),
+            last_window_start,
+        )
+        visible_suggestions = self.command_suggestions[
+            window_start : window_start + MAX_VISIBLE_AUTOCOMPLETE_OPTIONS
+        ]
+
+        rendered_suggestions = Text()
+        for visible_index, option in enumerate(visible_suggestions):
+            index = window_start + visible_index
+            selected = index == self.selected_suggestion_index
+            option_style = "bold #E5E5E5" if selected else "#808080"
+            rendered_suggestions.append("> " if selected else "  ", style=option_style)
+            rendered_suggestions.append(option.label, style=option_style)
+            rendered_suggestions.append(f"  {option.description}", style="#808080")
+            if visible_index < len(visible_suggestions) - 1:
+                rendered_suggestions.append("\n")
+        suggestion_list.update(rendered_suggestions)
+        suggestion_list.remove_class("hidden")
+
+    def _complete_selected_suggestion(self) -> None:
+        if not self.command_suggestions:
+            return
+        completion = self.command_suggestions[self.selected_suggestion_index].value
+        command_input = self.query_one("#command", Input)
+        command_input.value = completion
+        command_input.cursor_position = len(completion)
+        command_input.focus()
+        self._update_command_suggestions(completion)
+
+    def _clear_command_suggestions(self) -> None:
+        self.command_suggestions = []
+        self.selected_suggestion_index = 0
+        self._render_command_suggestions()
+
     @on(Input.Submitted, "#command")
     def on_command_submitted(self, event: Input.Submitted) -> None:
         raw_command = event.value.strip()
+        if raw_command and self.command_suggestions:
+            selected_value = self.command_suggestions[self.selected_suggestion_index].value.strip()
+            if raw_command.casefold() != selected_value.casefold():
+                self._complete_selected_suggestion()
+                return
+        self._clear_command_suggestions()
         event.input.value = ""
         if not raw_command:
             return
