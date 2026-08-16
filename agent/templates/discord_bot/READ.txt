@@ -1,0 +1,14 @@
+Discord bot template
+
+Replace bot.py with your bot Python script and start it in Homebru.
+
+The default bot.py comes with '/ping' and '/hello' commands.
+
+1. Create an application and bot at <https://discord.com/developers/applications>.
+2. Put the bot token in `.env`.
+3. Invite the bot to your server with the `bot` and `applications.commands`
+   scopes.
+4. Start it from Homebru's Services section.
+
+Runtime output is written to `homebrew.log`. Do not commit `.env`.
+

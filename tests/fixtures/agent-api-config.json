@@ -1,0 +1,7 @@
+{
+  "token": "test-token",
+  "port": 8420,
+  "allowed_services": [],
+  "managed_apps": [],
+  "cors_origins": []
+}

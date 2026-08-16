@@ -1,0 +1,5 @@
+Node.js web server 
+
+Install Node.js if it is not already available, then start this server from the
+Homebru dashboard. Open http://localhost:{{PORT}} on this computer. No npm
+packages are required by this starter.

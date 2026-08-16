@@ -1,0 +1,10 @@
+{
+  "token": null,
+  "port": 8420,
+  "allowed_services": [
+    "plexmediaserver",
+    "docker"
+  ],
+  "managed_apps": [],
+  "cors_origins": []
+}

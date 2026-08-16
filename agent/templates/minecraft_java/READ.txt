@@ -1,0 +1,11 @@
+Minecraft Java server - Homebru template
+
+1. Install Java for the Minecraft server version you intend to use.
+2. Download the official Minecraft Java server file and save it here as server.jar.
+3. Read https://aka.ms/MinecraftEULA. If you accept it, change eula=false to
+   eula=true in eula.txt.
+4. Review server.properties. The default port is 25565.
+5. Select this server in Homebru and choose Start.
+
+Console output is written to homebrew.log. Homebru does not download a server
+JAR or accept the EULA for you.
