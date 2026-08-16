@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, DataTable, Input
+from textual.widgets import Button, DataTable, Input, Static
 
 from homebrew_manager.config import ServerConfig
 from homebrew_manager.tui import HomebruApp
@@ -19,6 +19,16 @@ class TuiSmokeTests(unittest.IsolatedAsyncioTestCase):
             button_group_center = (buttons[0].region.x + buttons[-1].region.right) / 2
             row_center = action_row.region.x + action_row.region.width / 2
             self.assertAlmostEqual(button_group_center, row_center, delta=1)
+
+            command_input = app.query_one("#command", Input)
+            command_input.focus()
+            command_input.value = "/"
+            await pilot.pause()
+
+            suggestions = app.query_one("#command-suggestions", Static)
+            command_bar = app.query_one("#composer-wrap", Horizontal)
+            self.assertLessEqual(suggestions.region.height, 4)
+            self.assertLessEqual(command_bar.region.bottom, app.screen.region.bottom)
 
     async def test_command_autocomplete_completes_commands_and_service_names(self):
         app = HomebruApp(None, Path.cwd() / "unused-config.json", save_connection=False)

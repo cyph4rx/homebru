@@ -60,8 +60,8 @@ finishing setup yourself. The Node.js template needs Node.js already
 installed.
 
 The Discord token is optional while setting up. leave it blank and just
-add it to the generated `.env` file before starting the bot. Check
-[`agent/README.txt`](agent/README.txt) for the Discord Developer Portal steps.
+add it to the generated `.env` file before starting the bot. Its generated
+`READ.txt` covers the Discord Developer Portal steps.
 
 Setting up a **remote computer?** Copy the `agent/` folder over to it and follow
 the short headless setup in [`agent/README.txt`](agent/README.txt), then pick

@@ -116,7 +116,7 @@ COMMAND_AUTOCOMPLETE_OPTIONS = (
     AutocompleteOption("/quit", "/quit", "Exit Homebru"),
 )
 SERVICE_COMMANDS = frozenset({"/start", "/stop", "/restart"})
-MAX_VISIBLE_AUTOCOMPLETE_OPTIONS = 6
+MAX_VISIBLE_AUTOCOMPLETE_OPTIONS = 2
 
 HELP_TEXT = (
     "Commands: /start [service]  /stop [service]  /restart [service]  "
@@ -324,8 +324,8 @@ class HomebruApp(App[None]):
     #hint { width: auto; height: 1; content-align: right middle; color: $muted; }
     #command-suggestions {
         height: auto;
-        max-height: 8;
-        padding: 0 2;
+        max-height: 4;
+        padding: 0 1;
         background: $paper;
         color: $muted;
         border: solid $line;
