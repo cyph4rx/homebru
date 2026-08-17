@@ -11,6 +11,7 @@ from pathlib import Path
 
 from agent import setup_agent
 from agent.config import default_config_path as default_agent_config_path
+from agent.processes import hidden_window_creation_flags
 
 from .config import ServerConfig
 
@@ -59,20 +60,19 @@ def _launch_agent_process() -> tuple[subprocess.Popen, Path]:
 
     log_path = default_agent_config_path().parent / "agent.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    creation_flags = (
-        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-        if os.name == "nt"
-        else 0
-    )
+    environment = os.environ.copy()
+    if getattr(sys, "frozen", False):
+        environment["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     with log_path.open("ab") as log:
         process = subprocess.Popen(
             command,
             cwd=working_directory,
+            env=environment,
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
             start_new_session=os.name != "nt",
-            creationflags=creation_flags,
+            creationflags=hidden_window_creation_flags(new_process_group=True),
         )
     return process, log_path
 

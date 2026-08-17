@@ -12,8 +12,10 @@ from pathlib import Path
 
 try:
     from . import config as agent_config
+    from .processes import hidden_window_creation_flags
 except ImportError:  # Support running this file directly.
     import config as agent_config
+    from processes import hidden_window_creation_flags
 
 
 AGENT_DIR = Path(__file__).resolve().parent
@@ -46,6 +48,7 @@ def install_requirements(environment: Path, requirements: Path, *, quiet: bool =
         [str(venv_python(environment)), "-m", "pip", "install", "-r", str(requirements)],
         capture_output=quiet,
         text=quiet,
+        creationflags=hidden_window_creation_flags(),
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "pip install failed").strip()

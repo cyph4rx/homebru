@@ -1,6 +1,6 @@
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, mock_open, patch
 
 from homebrew_manager import local_setup
 
@@ -69,6 +69,32 @@ class LocalSetupTests(unittest.TestCase):
             local_setup.ensure_local_agent(remote)
 
         start_agent.assert_called_once_with(8420, "local-token")
+
+    def test_frozen_agent_starts_without_a_console_window(self):
+        process = Mock()
+        config_path = Path(__file__).parent / "config.json"
+        with (
+            patch.object(local_setup.sys, "frozen", True, create=True),
+            patch.object(local_setup.sys, "executable", "homebru.exe"),
+            patch.object(local_setup, "default_agent_config_path", return_value=config_path),
+            patch.object(
+                local_setup,
+                "hidden_window_creation_flags",
+                return_value=123,
+            ) as creation_flags,
+            patch.object(local_setup.Path, "open", mock_open()),
+            patch.object(local_setup.subprocess, "Popen", return_value=process) as popen,
+        ):
+            launched_process, log_path = local_setup._launch_agent_process()
+
+        self.assertIs(launched_process, process)
+        self.assertEqual(log_path, config_path.parent / "agent.log")
+        creation_flags.assert_called_once_with(new_process_group=True)
+        self.assertEqual(popen.call_args.kwargs["creationflags"], 123)
+        self.assertEqual(
+            popen.call_args.kwargs["env"]["PYINSTALLER_RESET_ENVIRONMENT"],
+            "1",
+        )
 
 
 if __name__ == "__main__":

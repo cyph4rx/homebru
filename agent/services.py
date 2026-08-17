@@ -7,8 +7,10 @@ import psutil
 
 try:
     from . import managed_apps as app_manager
+    from .processes import hidden_window_creation_flags
 except ImportError:  # Support running this file directly.
     import managed_apps as app_manager
+    from processes import hidden_window_creation_flags
 
 VALID_ACTIONS = {"start", "stop", "restart"}
 
@@ -28,6 +30,7 @@ def _run_service_command(executable: str, args: list[str], fallback_error: str) 
             capture_output=True,
             text=True,
             timeout=10,
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.SubprocessError, OSError) as exc:
         raise ServiceError(str(exc)) from exc

@@ -3,9 +3,15 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import psutil
+
+try:
+    from .processes import hidden_window_creation_flags
+except ImportError:  # Support running this file directly.
+    from processes import hidden_window_creation_flags
 
 
 class ManagedAppError(RuntimeError):
@@ -93,7 +99,7 @@ def _launch_managed_process(
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 start_new_session=os.name != "nt",
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+                creationflags=hidden_window_creation_flags(new_process_group=True),
             )
     except (OSError, subprocess.SubprocessError) as exc:
         raise ManagedAppError(f"could not start {app['name']}: {exc}") from exc
@@ -125,6 +131,8 @@ def start(app: dict, runtime_dir: Path) -> None:
 
     environment = os.environ.copy()
     environment.update(_read_environment_file(app.get("env_file")))
+    if getattr(sys, "frozen", False) and Path(command[0]).resolve() == Path(sys.executable).resolve():
+        environment["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     log_path = Path(app.get("log_file") or working_directory / "homebrew.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     runtime_dir.mkdir(parents=True, exist_ok=True)

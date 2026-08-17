@@ -4,6 +4,11 @@ import time
 
 import psutil
 
+try:
+    from .processes import hidden_window_creation_flags
+except ImportError:  # Support running this file directly.
+    from processes import hidden_window_creation_flags
+
 
 def get_uptime_seconds() -> float:
     return time.time() - psutil.boot_time()
@@ -59,6 +64,7 @@ def get_gpu_stats() -> list:
             capture_output=True,
             text=True,
             timeout=3,
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.SubprocessError, OSError):
         return []
