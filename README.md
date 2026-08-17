@@ -24,17 +24,30 @@ interface to get you started even if you've never ran a server.
 
 ### 1. Install Homebru
 
-On the computer you'll use to manage the server:
+The installer only requires **Python 3.10** or newer.
+
+On Windows, run the shared Python installer by its full path from PowerShell:
 
 ```powershell
-cd D:\path\to\homebru
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
+py "D:\path\to\homebru\install.py"
+```
+
+On Linux or macOS, use the small shell launcher:
+
+```bash
+sh /path/to/homebru/install.sh
+```
+
+Close and reopen your terminal after installation. You can then launch
+Homebru from any folder:
+
+```powershell
 homebru
 ```
 
-On Linux or macOS, use `source .venv/bin/activate` instead.
+To uninstall the command,
+run `py D:\path\to\homebru\install.py --uninstall` on Windows or
+`sh /path/to/homebru/install.sh --uninstall` on Linux and macOS.
 
 ### 2. Choose your setup inside Homebru
 

@@ -25,3 +25,10 @@ homebru = "homebrew_manager.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["homebrew_manager", "agent"]
+exclude = [
+  "/agent/.venv",
+  "/agent/data",
+  "/agent/servers",
+  "**/__pycache__",
+  "**/*.pyc",
+]
