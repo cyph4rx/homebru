@@ -1,6 +1,7 @@
 import json
 import os
 import secrets
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,12 @@ def default_config_path() -> Path:
     override = os.environ.get("AGENT_CONFIG_PATH")
     if override:
         return Path(override)
+    if getattr(sys, "frozen", False):
+        if os.name == "nt":
+            config_root = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        else:
+            config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        return config_root / "homebru" / "agent" / "config.json"
     return Path(__file__).resolve().parent / "data" / "config.json"
 
 

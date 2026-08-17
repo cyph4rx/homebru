@@ -11,7 +11,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
-from textual.widgets import Button, DataTable, Input, Label, Static
+from textual.widgets import Button, DataTable, Input, Label, RichLog, Static
 
 from .api import AgentClient, AgentError, ServiceAction
 from .config import ConfigError, ServerConfig, save_config
@@ -107,6 +107,7 @@ COMMAND_AUTOCOMPLETE_OPTIONS = (
     AutocompleteOption("/start ", "/start [service]", "Start a service"),
     AutocompleteOption("/stop ", "/stop [service]", "Stop a service"),
     AutocompleteOption("/restart ", "/restart [service]", "Restart a service"),
+    AutocompleteOption("/console ", "/console [server]", "Open server logs and console"),
     AutocompleteOption("/refresh", "/refresh", "Refresh server data"),
     AutocompleteOption("/home", "/home", "Return to the home screen"),
     AutocompleteOption("/setup", "/setup", "Browse server templates"),
@@ -115,12 +116,12 @@ COMMAND_AUTOCOMPLETE_OPTIONS = (
     AutocompleteOption("/help", "/help", "Show available commands"),
     AutocompleteOption("/quit", "/quit", "Exit Homebru"),
 )
-SERVICE_COMMANDS = frozenset({"/start", "/stop", "/restart"})
+SERVICE_COMMANDS = frozenset({"/start", "/stop", "/restart", "/console"})
 MAX_VISIBLE_AUTOCOMPLETE_OPTIONS = 2
 
 HELP_TEXT = (
     "Commands: /start [service]  /stop [service]  /restart [service]  "
-    "/refresh  /home  /setup  /custom  /connect  /quit"
+    "/console [server]  /refresh  /home  /setup  /custom  /connect  /quit"
 )
 
 
@@ -273,7 +274,8 @@ class HomebruApp(App[None]):
         text-align: center;
     }
     #welcome-server-actions, #welcome-setup-actions, #template-picker-actions,
-    #local-setup-actions, #custom-setup-actions, #connection-actions, #service-actions {
+    #local-setup-actions, #custom-setup-actions, #connection-actions, #service-actions,
+    #console-actions {
         height: 3;
         align-horizontal: center;
     }
@@ -313,6 +315,29 @@ class HomebruApp(App[None]):
     DataTable > .datatable--header { background: $paper; color: $muted; text-style: bold; }
     DataTable > .datatable--cursor { background: #202020; color: $ink; }
     #service-actions { padding-top: 0; }
+    #console-panel { height: 20; padding-bottom: 0; }
+    #console-heading { height: 1; color: $ink; text-style: bold; }
+    #console-note { height: 2; color: $muted; }
+    #console-log {
+        height: 11;
+        padding: 0 1;
+        background: $paper;
+        color: $ink;
+        border: solid $line;
+        scrollbar-color: #505050;
+        scrollbar-background: $paper;
+    }
+    #console-command-row { height: 3; padding: 0 1; border: solid $line; }
+    #console-prompt { width: 3; height: 1; color: $ink; content-align: left middle; }
+    #server-console-command {
+        width: 1fr;
+        height: 1;
+        padding: 0;
+        border: none;
+        background: $paper;
+        color: $ink;
+    }
+    #server-console-command:focus { border: none; }
     Button { min-width: 12; height: 1; margin-left: 1; background: $paper; color: $muted; border: none; }
     Button:hover { background: #202020; color: $ink; }
     #stop { color: $bad; }
@@ -349,10 +374,15 @@ class HomebruApp(App[None]):
         self.save_connection = save_connection
         self.client: AgentClient | None = None
         self.service_names: list[str] = []
+        self.service_details: dict[str, dict[str, Any]] = {}
         self.refresh_timer = None
+        self.console_timer = None
         self.refresh_in_progress = False
+        self.console_refresh_in_progress = False
         self.setup_in_progress = False
         self.selected_template_id = "discord-bot"
+        self.console_service_name: str | None = None
+        self.last_console_content: str | None = None
         self.dashboard_open = False
         self.command_suggestions: list[AutocompleteOption] = []
         self.selected_suggestion_index = 0
@@ -575,13 +605,38 @@ class HomebruApp(App[None]):
                 Button("Start", id="start"),
                 Button("Stop", id="stop"),
                 Button("Restart", id="restart"),
+                Button("Console", id="open-console"),
                 Button("Refresh", id="refresh"),
                 id="service-actions",
             ),
             classes="panel",
             id="services-panel",
         )
-        return VerticalScroll(summary, hardware, services, id="content-scroll", classes="hidden")
+        console = Vertical(
+            Static("Server console", id="console-heading"),
+            Static("Select a Homebru-managed server to view its output.", id="console-note"),
+            RichLog(
+                id="console-log",
+                max_lines=1000,
+                wrap=True,
+                highlight=False,
+                markup=False,
+            ),
+            Horizontal(
+                Static(">", id="console-prompt"),
+                Input(placeholder="Enter a server command", id="server-console-command"),
+                id="console-command-row",
+            ),
+            Horizontal(
+                Button("Back", id="close-console"),
+                Button("Send", id="send-console"),
+                Button("Refresh", id="refresh-console"),
+                id="console-actions",
+            ),
+            classes="panel hidden",
+            id="console-panel",
+        )
+        return VerticalScroll(summary, hardware, services, console, id="content-scroll", classes="hidden")
 
     def _build_command_bar(self) -> Horizontal:
         return Horizontal(
@@ -597,14 +652,19 @@ class HomebruApp(App[None]):
         self._show_home()
 
     async def on_unmount(self) -> None:
-        if self.client:
-            await self.client.close()
+        self.dashboard_open = False
+        self._hide_console()
+        client = self.client
+        self.client = None
+        if client:
+            await client.close()
 
     def _pause_dashboard(self) -> None:
         self.dashboard_open = False
         if self.refresh_timer:
             self.refresh_timer.stop()
             self.refresh_timer = None
+        self._hide_console()
         old_client = self.client
         self.client = None
         if old_client:
@@ -911,11 +971,13 @@ class HomebruApp(App[None]):
         cursor = table.cursor_row
         table.clear()
         self.service_names = []
+        self.service_details = {}
         for service in services:
             name = str(service.get("name", "unknown"))
             state = str(service.get("active_state", "unknown"))
             substate = str(service.get("sub_state", "unknown"))
             self.service_names.append(name)
+            self.service_details[name] = service
             table.add_row(
                 _service_status_label(state),
                 name,
@@ -926,6 +988,8 @@ class HomebruApp(App[None]):
             )
         if self.service_names:
             table.move_cursor(row=min(cursor, len(self.service_names) - 1))
+        if self.console_service_name and self.console_service_name not in self.service_details:
+            self._hide_console()
 
     def _selected_service(self) -> str | None:
         table = self.query_one("#service-table", DataTable)
@@ -933,6 +997,110 @@ class HomebruApp(App[None]):
             self._set_message("Select a service first.", "error")
             return None
         return self.service_names[table.cursor_row]
+
+    def _hide_console(self) -> None:
+        if self.console_timer:
+            self.console_timer.stop()
+            self.console_timer = None
+        self.console_service_name = None
+        self.last_console_content = None
+        try:
+            self.query_one("#console-panel", Vertical).add_class("hidden")
+        except NoMatches:
+            pass
+
+    def _close_console(self) -> None:
+        self._hide_console()
+        self.query_one("#service-table", DataTable).focus()
+        self._set_message("Closed the server console.")
+
+    def _show_console(self, service_name: str | None = None) -> None:
+        name = service_name or self._selected_service()
+        if not name or not self.client:
+            return
+        service = self.service_details.get(name, {})
+        if service.get("kind") != "managed_app":
+            self._set_message("Logs and console input are available for Homebru-managed servers.", "error")
+            return
+
+        self.console_service_name = name
+        self.last_console_content = None
+        self.query_one("#console-heading", Static).update(f"Server console: {name}")
+        self.query_one("#console-note", Static).update("Loading the latest server output...")
+        log = self.query_one("#console-log", RichLog)
+        log.clear()
+        log.write("Loading...")
+        panel = self.query_one("#console-panel", Vertical)
+        panel.remove_class("hidden")
+        panel.scroll_visible()
+        self.query_one("#server-console-command", Input).focus()
+        if self.console_timer:
+            self.console_timer.stop()
+        self.console_timer = self.set_interval(1, self.refresh_console)
+        self.refresh_console()
+
+    @work(exclusive=True, group="console-refresh")
+    async def refresh_console(self) -> None:
+        client = self.client
+        name = self.console_service_name
+        if not client or not name or self.console_refresh_in_progress:
+            return
+        self.console_refresh_in_progress = True
+        try:
+            result = await client.get_service_logs(name)
+        except AgentError as exc:
+            if self.client is client and self.console_service_name == name:
+                try:
+                    self.query_one("#console-note", Static).update(f"Console error: {exc}")
+                except NoMatches:
+                    pass
+            return
+        finally:
+            self.console_refresh_in_progress = False
+
+        if self.client is not client or self.console_service_name != name:
+            return
+        try:
+            content = result["content"]
+            if content != self.last_console_content:
+                log = self.query_one("#console-log", RichLog)
+                log.clear()
+                log.write(content or "No server output yet.")
+                self.last_console_content = content
+
+            console_available = result.get("console_available") is True
+            command_input = self.query_one("#server-console-command", Input)
+            command_input.disabled = not console_available
+            note = (
+                "Live output refreshes every second. Enter a command below."
+                if console_available
+                else "Live output refreshes every second. Restart this server from Homebru to enable input."
+            )
+            self.query_one("#console-note", Static).update(note)
+        except NoMatches:
+            return
+
+    @work(exclusive=True, group="console-send")
+    async def _send_console_command(self) -> None:
+        client = self.client
+        name = self.console_service_name
+        command_input = self.query_one("#server-console-command", Input)
+        command = command_input.value.rstrip("\r\n")
+        if not client or not name:
+            return
+        if not command:
+            self._set_message("Enter a server command first.", "error")
+            return
+
+        self._set_message(f"Sending command to {name}...", "active")
+        try:
+            await client.send_console_command(name, command)
+        except AgentError as exc:
+            self._set_message(f"Console error: {exc}", "error")
+            return
+        command_input.value = ""
+        self._set_message(f"Sent command to {name}.", "active")
+        self.refresh_console()
 
     @work(exclusive=True, group="service-action")
     async def _control_service(self, action: ServiceAction, service_name: str | None = None) -> None:
@@ -975,6 +1143,14 @@ class HomebruApp(App[None]):
         elif button_id == "refresh":
             self._set_message("Refreshing...", "active")
             self.refresh_data()
+        elif button_id == "open-console":
+            self._show_console()
+        elif button_id == "close-console":
+            self._close_console()
+        elif button_id == "refresh-console":
+            self.refresh_console()
+        elif button_id == "send-console":
+            self._send_console_command()
         elif button_id == "home":
             self._show_home()
         elif button_id in {"start", "stop", "restart"}:
@@ -991,6 +1167,10 @@ class HomebruApp(App[None]):
     @on(Input.Submitted, "#custom-command")
     def on_custom_form_submitted(self) -> None:
         self._register_custom_server()
+
+    @on(Input.Submitted, "#server-console-command")
+    def on_server_console_submitted(self) -> None:
+        self._send_console_command()
 
     @on(Input.Changed, "#command")
     def on_command_changed(self, event: Input.Changed) -> None:
@@ -1082,6 +1262,8 @@ class HomebruApp(App[None]):
     def _execute_command(self, command: str, argument: str) -> None:
         if command in {"start", "stop", "restart"}:
             self._control_service(command, argument or None)  # type: ignore[arg-type]
+        elif command in {"console", "logs"}:
+            self._show_console(argument or None)
         elif command in {"refresh", "r"}:
             self.refresh_data()
         elif command in {"connect", "connection"}:

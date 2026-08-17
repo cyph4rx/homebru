@@ -4,20 +4,23 @@ build-backend = "hatchling.build"
 
 [project]
 name = "homebru"
-version = "1.0.0"
+version = "1.1.0"
 description = "A terminal app that lets you host servers on your PC."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "fastapi==0.115.0",
   "httpx>=0.27,<1",
+  "psutil==6.0.0",
   "textual>=1.0,<2",
+  "uvicorn[standard]==0.30.6",
 ]
 
 [project.optional-dependencies]
-test = [
-  "fastapi==0.115.0",
-  "psutil==6.0.0",
-  "uvicorn[standard]==0.30.6",
+test = []
+release = [
+  "discord.py==2.7.1",
+  "pyinstaller>=6.12,<7",
 ]
 
 [project.scripts]

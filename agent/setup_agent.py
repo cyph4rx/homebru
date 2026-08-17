@@ -31,6 +31,12 @@ def venv_python(directory: Path) -> Path:
     return directory / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
+def _python_script_command(interpreter: Path, script: Path, *arguments: str) -> list[str]:
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--run-bundled-script", str(script), *arguments]
+    return [str(interpreter), str(script), *arguments]
+
+
 def install_requirements(environment: Path, requirements: Path, *, quiet: bool = False) -> None:
     if not venv_python(environment).exists():
         print(f"Creating virtual environment: {environment}")
@@ -141,7 +147,7 @@ def create_discord_bot(name: str, project_dir: Path, discord_token: str, install
     return _managed_app_config(
         name,
         project_dir,
-        [str(venv_python(bot_environment)), str(project_dir / "bot.py")],
+        _python_script_command(venv_python(bot_environment), project_dir / "bot.py"),
         f"Discord bot ({name})",
         environment_file=env_path,
     )
@@ -167,7 +173,12 @@ def create_python_http_server(name: str, project_dir: Path, port: int = 8000) ->
     return _managed_app_config(
         name,
         project_dir,
-        [str(venv_python(AGENT_DIR / ".venv")), str(project_dir / "server.py"), "--port", str(port)],
+        _python_script_command(
+            venv_python(AGENT_DIR / ".venv"),
+            project_dir / "server.py",
+            "--port",
+            str(port),
+        ),
         f"Python web server ({name})",
     )
 

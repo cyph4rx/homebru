@@ -75,6 +75,27 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(has_target.call_count, 2)
         get_status.assert_called_once_with(managed_apps[1], Path("runtime"))
 
+    @patch.object(services.app_manager, "console_input_available", return_value=True)
+    @patch.object(services.app_manager, "read_log_tail", return_value="server ready")
+    def test_reads_managed_server_logs(self, read_log, console_available):
+        managed_app = {"name": "minecraft", "cwd": "server"}
+
+        result = services.get_service_logs("minecraft", [managed_app], "runtime", 50)
+
+        self.assertEqual(result["content"], "server ready")
+        self.assertTrue(result["console_available"])
+        read_log.assert_called_once_with(managed_app, 50)
+        console_available.assert_called_once_with(managed_app, Path("runtime"))
+
+    @patch.object(services.app_manager, "send_console_command")
+    def test_sends_managed_server_console_command(self, send_command):
+        managed_app = {"name": "minecraft", "cwd": "server"}
+
+        result = services.send_console_command("minecraft", "list", [managed_app], "runtime")
+
+        self.assertEqual(result, {"name": "minecraft", "sent": True})
+        send_command.assert_called_once_with(managed_app, "list", Path("runtime"))
+
 
 if __name__ == "__main__":
     unittest.main()

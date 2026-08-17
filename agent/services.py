@@ -149,6 +149,52 @@ def list_services(
     return service_statuses
 
 
+def _find_managed_app(name: str, managed_apps: list[dict] | None) -> dict:
+    managed_app = next(
+        (app_config for app_config in managed_apps or [] if app_config["name"] == name),
+        None,
+    )
+    if managed_app is None:
+        raise ServiceError(f"'{name}' is not a Homebru-managed server")
+    return managed_app
+
+
+def get_service_logs(
+    name: str,
+    managed_apps: list[dict] | None,
+    runtime_dir: str | Path | None = None,
+    line_count: int = 200,
+) -> dict:
+    managed_app = _find_managed_app(name, managed_apps)
+    state_dir = _runtime_directory(runtime_dir)
+    try:
+        return {
+            "name": name,
+            "content": app_manager.read_log_tail(managed_app, line_count),
+            "console_available": app_manager.console_input_available(managed_app, state_dir),
+        }
+    except app_manager.ManagedAppError as exc:
+        raise ServiceError(str(exc)) from exc
+
+
+def send_console_command(
+    name: str,
+    command: str,
+    managed_apps: list[dict] | None,
+    runtime_dir: str | Path | None = None,
+) -> dict:
+    managed_app = _find_managed_app(name, managed_apps)
+    try:
+        app_manager.send_console_command(
+            managed_app,
+            command,
+            _runtime_directory(runtime_dir),
+        )
+    except app_manager.ManagedAppError as exc:
+        raise ServiceError(str(exc)) from exc
+    return {"name": name, "sent": True}
+
+
 def control_service(
     name: str,
     action: str,

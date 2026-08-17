@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, DataTable, Input, Static
@@ -9,6 +10,42 @@ from homebrew_manager.tui import HomebruApp
 
 
 class TuiSmokeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_managed_server_console_loads_logs_and_sends_input(self):
+        app = HomebruApp(None, Path.cwd() / "unused-config.json", save_connection=False)
+
+        async with app.run_test(size=(120, 40)) as pilot:
+            client = AsyncMock()
+            client.get_service_logs.return_value = {
+                "name": "minecraft",
+                "content": "Server started",
+                "console_available": True,
+            }
+            app.client = client
+            app.dashboard_open = True
+            app._render_services([{
+                "name": "minecraft",
+                "active_state": "active",
+                "sub_state": "running",
+                "enabled": "managed",
+                "description": "Minecraft server",
+                "kind": "managed_app",
+                "console_available": True,
+            }])
+
+            app._show_console("minecraft")
+            await pilot.pause()
+
+            self.assertFalse(app.query_one("#console-panel", Vertical).has_class("hidden"))
+            self.assertEqual(app.last_console_content, "Server started")
+            console_input = app.query_one("#server-console-command", Input)
+            self.assertFalse(console_input.disabled)
+            console_input.value = "list"
+            app._send_console_command()
+            await pilot.pause()
+
+            client.send_console_command.assert_awaited_once_with("minecraft", "list")
+            self.assertEqual(console_input.value, "")
+
     async def test_home_action_buttons_stay_centered_at_narrow_width(self):
         app = HomebruApp(None, Path.cwd() / "unused-config.json", save_connection=False)
 

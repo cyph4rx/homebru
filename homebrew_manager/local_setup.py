@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -9,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent import setup_agent
+from agent.config import default_config_path as default_agent_config_path
 
 from .config import ServerConfig
 
@@ -28,6 +30,8 @@ AGENT_PROBE_INTERVAL_SECONDS = 0.25
 
 
 def default_server_directory(name: str = "discord-bot") -> Path:
+    if getattr(sys, "frozen", False):
+        return Path.home() / "Homebru Servers" / setup_agent.slugify(name)
     return setup_agent.AGENT_DIR / "servers" / setup_agent.slugify(name)
 
 
@@ -46,8 +50,14 @@ def _probe_local_agent(port: int, token: str) -> int | None:
 
 
 def _launch_agent_process() -> tuple[subprocess.Popen, Path]:
-    agent_python = setup_agent.venv_python(setup_agent.AGENT_DIR / ".venv")
-    log_path = setup_agent.AGENT_DIR / "data" / "agent.log"
+    if getattr(sys, "frozen", False):
+        command = [sys.executable, "--agent"]
+        working_directory = Path.home()
+    else:
+        command = [sys.executable, "-m", "agent.main"]
+        working_directory = setup_agent.AGENT_DIR.parent
+
+    log_path = default_agent_config_path().parent / "agent.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     creation_flags = (
         subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
@@ -56,8 +66,8 @@ def _launch_agent_process() -> tuple[subprocess.Popen, Path]:
     )
     with log_path.open("ab") as log:
         process = subprocess.Popen(
-            [str(agent_python), str(setup_agent.AGENT_DIR / "main.py")],
-            cwd=setup_agent.AGENT_DIR,
+            command,
+            cwd=working_directory,
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
@@ -98,11 +108,6 @@ def ensure_local_agent(config: ServerConfig) -> None:
 
 
 def _register_app_and_start_agent(app_config: dict, next_step: str = "") -> LocalSetupResult:
-    setup_agent.install_requirements(
-        setup_agent.AGENT_DIR / ".venv",
-        setup_agent.AGENT_DIR / "requirements.txt",
-        quiet=True,
-    )
     agent_config = setup_agent.register_app(app_config)
     _start_agent(agent_config["port"], agent_config["token"])
     return LocalSetupResult(
@@ -126,11 +131,12 @@ def _parse_template_number(value: str, default: int, error_message: str) -> int:
 
 def _create_discord_template(name: str, project_dir: Path, token: str) -> tuple[dict, str]:
     app_config = setup_agent.create_discord_bot(name, project_dir, token, install=False)
-    setup_agent.install_requirements(
-        Path(app_config["cwd"]) / ".venv",
-        Path(app_config["cwd"]) / "requirements.txt",
-        quiet=True,
-    )
+    if not getattr(sys, "frozen", False):
+        setup_agent.install_requirements(
+            Path(app_config["cwd"]) / ".venv",
+            Path(app_config["cwd"]) / "requirements.txt",
+            quiet=True,
+        )
     next_step = "" if token.strip() else "Add the Discord token to .env before starting the bot."
     return app_config, next_step
 

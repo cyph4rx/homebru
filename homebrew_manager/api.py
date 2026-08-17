@@ -32,9 +32,9 @@ class AgentClient:
     async def close(self) -> None:
         await self._client.aclose()
 
-    async def _request(self, method: str, path: str) -> Any:
+    async def _request(self, method: str, path: str, *, json_body: Any = None) -> Any:
         try:
-            response = await self._client.request(method, path)
+            response = await self._client.request(method, path, json=json_body)
         except httpx.TimeoutException as exc:
             raise AgentError(f"{self.config.host} did not respond in time") from exc
         except httpx.RequestError as exc:
@@ -75,3 +75,23 @@ class AgentClient:
         if not isinstance(result, dict):
             raise AgentError("the agent returned a malformed service status")
         return result
+
+    async def get_service_logs(self, name: str, line_count: int = 200) -> dict[str, Any]:
+        encoded_name = quote(name, safe="")
+        result = await self._request(
+            "GET",
+            f"/services/{encoded_name}/logs?lines={line_count}",
+        )
+        if not isinstance(result, dict) or not isinstance(result.get("content"), str):
+            raise AgentError("the agent returned malformed server logs")
+        return result
+
+    async def send_console_command(self, name: str, command: str) -> None:
+        encoded_name = quote(name, safe="")
+        result = await self._request(
+            "POST",
+            f"/services/{encoded_name}/console",
+            json_body={"command": command},
+        )
+        if not isinstance(result, dict) or result.get("sent") is not True:
+            raise AgentError("the agent did not accept the console command")

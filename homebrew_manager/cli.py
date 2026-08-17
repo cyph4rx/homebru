@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import runpy
 import sys
 from pathlib import Path
 
@@ -20,8 +21,51 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--https", action="store_true", help="connect using HTTPS")
     parser.add_argument("--config", type=Path, default=default_config_path(), help="connection config path")
     parser.add_argument("--no-save", action="store_true", help="do not save connection changes")
+    agent_mode = parser.add_mutually_exclusive_group()
+    agent_mode.add_argument("--agent", action="store_true", help="run the Homebru server agent")
+    agent_mode.add_argument(
+        "--show-agent-token",
+        action="store_true",
+        help="print the local agent token and exit",
+    )
+    agent_mode.add_argument(
+        "--show-agent-config",
+        action="store_true",
+        help="print the local agent configuration path and exit",
+    )
     parser.add_argument("--version", action="version", version=f"Homebru {__version__}")
     return parser
+
+
+def _run_bundled_script() -> bool:
+    if not getattr(sys, "frozen", False) or sys.argv[1:2] != ["--run-bundled-script"]:
+        return False
+    if len(sys.argv) < 3:
+        raise SystemExit("homebru: bundled script path is required")
+    script_path = Path(sys.argv[2]).resolve()
+    sys.argv = [str(script_path), *sys.argv[3:]]
+    runpy.run_path(str(script_path), run_name="__main__")
+    return True
+
+
+def _run_agent_mode(args: argparse.Namespace) -> bool:
+    if args.show_agent_token:
+        from agent.config import load_config
+
+        print(load_config(announce_token=False)["token"])
+        return True
+    if args.show_agent_config:
+        from agent.config import CONFIG_PATH
+
+        print(CONFIG_PATH)
+        return True
+    if args.agent:
+        from agent.main import run
+
+        sys.argv = [sys.argv[0]]
+        run()
+        return True
+    return False
 
 
 def resolve_config(args: argparse.Namespace) -> ServerConfig | None:
@@ -43,8 +87,12 @@ def resolve_config(args: argparse.Namespace) -> ServerConfig | None:
 
 
 def main() -> None:
+    if _run_bundled_script():
+        return
     parser = build_parser()
     args = parser.parse_args()
+    if _run_agent_mode(args):
+        return
     try:
         config = resolve_config(args)
     except ConfigError as exc:

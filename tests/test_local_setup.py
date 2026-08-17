@@ -6,6 +6,12 @@ from homebrew_manager import local_setup
 
 
 class LocalSetupTests(unittest.TestCase):
+    def test_frozen_build_uses_a_stable_server_directory(self):
+        with patch.object(local_setup.sys, "frozen", True, create=True):
+            directory = local_setup.default_server_directory("My Server")
+
+        self.assertEqual(directory, Path.home() / "Homebru Servers" / "my-server")
+
     def test_discord_setup_installs_registers_starts_and_returns_connection(self):
         project_dir = Path("test-server").resolve()
         app = {
@@ -25,7 +31,7 @@ class LocalSetupTests(unittest.TestCase):
             )
 
         create_bot.assert_called_once_with("Test Bot", project_dir, "discord-token", install=False)
-        self.assertEqual(install.call_count, 2)
+        install.assert_called_once()
         register.assert_called_once_with(app)
         start_agent.assert_called_once_with(9123, "agent-token")
         self.assertEqual(result.connection.host, "127.0.0.1")
@@ -50,7 +56,7 @@ class LocalSetupTests(unittest.TestCase):
             )
 
         create_custom.assert_called_once_with("Custom Server", project_dir, "python server.py", "My server")
-        install.assert_called_once()
+        install.assert_not_called()
         start_agent.assert_called_once_with(8420, "agent-token")
         self.assertIn("registered", result.next_step.lower())
 

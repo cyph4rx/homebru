@@ -13,6 +13,8 @@ class ManagedAppError(RuntimeError):
 
 
 _LAUNCHED_PROCESSES: dict[str, subprocess.Popen] = {}
+MAX_LOG_READ_BYTES = 256 * 1024
+MAX_LOG_LINES = 1000
 
 
 def _state_path(app: dict, runtime_dir: Path) -> Path:
@@ -64,6 +66,7 @@ def get_status(app: dict, runtime_dir: Path) -> dict:
         "enabled": "managed",
         "description": app.get("description", "Managed application"),
         "kind": "managed_app",
+        "console_available": console_input_available(app, runtime_dir),
     }
 
 
@@ -86,7 +89,7 @@ def _launch_managed_process(
                 app["command"],
                 cwd=working_directory,
                 env=environment,
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE,
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 start_new_session=os.name != "nt",
@@ -133,6 +136,8 @@ def start(app: dict, runtime_dir: Path) -> None:
 def _discard_finished_process_handle(name: str) -> None:
     launched_process = _LAUNCHED_PROCESSES.pop(name, None)
     if launched_process and launched_process.poll() is not None:
+        if launched_process.stdin:
+            launched_process.stdin.close()
         launched_process.wait()
 
 
@@ -140,6 +145,8 @@ def _wait_for_launched_process(name: str) -> None:
     launched_process = _LAUNCHED_PROCESSES.pop(name, None)
     if not launched_process:
         return
+    if launched_process.stdin:
+        launched_process.stdin.close()
     try:
         launched_process.wait(timeout=1)
     except subprocess.TimeoutExpired:
@@ -172,6 +179,66 @@ def stop(app: dict, runtime_dir: Path) -> None:
     finally:
         _state_path(app, runtime_dir).unlink(missing_ok=True)
         _wait_for_launched_process(app["name"])
+
+
+def _active_process_handle(app: dict, runtime_dir: Path) -> subprocess.Popen | None:
+    process = _find_running_process(app, runtime_dir)
+    launched_process = _LAUNCHED_PROCESSES.get(app["name"])
+    if (
+        process is None
+        or launched_process is None
+        or launched_process.pid != process.pid
+        or launched_process.poll() is not None
+    ):
+        return None
+    return launched_process
+
+
+def console_input_available(app: dict, runtime_dir: Path) -> bool:
+    process = _active_process_handle(app, runtime_dir)
+    return process is not None and process.stdin is not None
+
+
+def send_console_command(app: dict, command: str, runtime_dir: Path) -> None:
+    command = command.rstrip("\r\n")
+    if not command:
+        raise ManagedAppError("console command cannot be empty")
+    if "\n" in command or "\r" in command:
+        raise ManagedAppError("console commands must be a single line")
+    if len(command) > 4096:
+        raise ManagedAppError("console command is too long")
+
+    if _find_running_process(app, runtime_dir) is None:
+        raise ManagedAppError(f"{app['name']} is not running")
+    process = _active_process_handle(app, runtime_dir)
+    if process is None or process.stdin is None:
+        raise ManagedAppError(
+            "console input is unavailable; restart this server from Homebru and try again"
+        )
+    try:
+        process.stdin.write((command + "\n").encode("utf-8"))
+        process.stdin.flush()
+    except (BrokenPipeError, OSError) as exc:
+        raise ManagedAppError(f"could not send console input to {app['name']}: {exc}") from exc
+
+
+def read_log_tail(app: dict, line_count: int = 200) -> str:
+    if not 1 <= line_count <= MAX_LOG_LINES:
+        raise ManagedAppError(f"log line count must be between 1 and {MAX_LOG_LINES}")
+
+    working_directory = Path(app["cwd"])
+    log_path = Path(app.get("log_file") or working_directory / "homebrew.log")
+    if not log_path.exists():
+        return ""
+    try:
+        with log_path.open("rb") as log_file:
+            log_file.seek(0, os.SEEK_END)
+            file_size = log_file.tell()
+            log_file.seek(max(file_size - MAX_LOG_READ_BYTES, 0))
+            content = log_file.read().decode("utf-8", errors="replace")
+    except OSError as exc:
+        raise ManagedAppError(f"could not read the log for {app['name']}: {exc}") from exc
+    return "\n".join(content.splitlines()[-line_count:])
 
 
 def control(app: dict, action: str, runtime_dir: Path) -> dict:

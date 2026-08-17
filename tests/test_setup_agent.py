@@ -49,6 +49,17 @@ class AgentSetupTests(unittest.TestCase):
         setup_agent.create_discord_bot("bot", self.output, "", install=False)
         self.assertEqual((self.output / ".env").read_text(encoding="utf-8"), "DISCORD_TOKEN=original\n")
 
+    def test_frozen_agent_config_uses_per_user_storage(self):
+        environment_name = "APPDATA" if setup_agent.os.name == "nt" else "XDG_CONFIG_HOME"
+        config_root = Path("user-config")
+        with (
+            patch.object(setup_agent.agent_config.sys, "frozen", True, create=True),
+            patch.dict(setup_agent.agent_config.os.environ, {environment_name: str(config_root)}),
+        ):
+            config_path = setup_agent.agent_config.default_config_path()
+
+        self.assertEqual(config_path, config_root / "homebru" / "agent" / "config.json")
+
 
 class AdditionalTemplateTests(unittest.TestCase):
     def setUp(self):
@@ -88,6 +99,24 @@ class AdditionalTemplateTests(unittest.TestCase):
 
         self.assertEqual(app["command"], ["python", "server app.py", "--port", "9000"])
         self.assertEqual(app["description"], "Existing application")
+
+    def test_frozen_build_runs_python_templates_through_homebru(self):
+        script = self.output / "server.py"
+        with (
+            patch.object(setup_agent.sys, "frozen", True, create=True),
+            patch.object(setup_agent.sys, "executable", "homebru.exe"),
+        ):
+            command = setup_agent._python_script_command(
+                Path("unused-python"),
+                script,
+                "--port",
+                "8080",
+            )
+
+        self.assertEqual(
+            command,
+            ["homebru.exe", "--run-bundled-script", str(script), "--port", "8080"],
+        )
 
 
 if __name__ == "__main__":

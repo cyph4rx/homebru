@@ -55,6 +55,45 @@ def read_services(authorization: str | None = Header(default=None)) -> list[dict
     )
 
 
+@app.get("/services/{name}/logs")
+def read_service_logs(
+    name: str,
+    lines: int = 200,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    current_config = _load_authorized_config(authorization)
+    try:
+        return services.get_service_logs(
+            name,
+            current_config["managed_apps"],
+            RUNTIME_DIR,
+            lines,
+        )
+    except services.ServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/services/{name}/console")
+def write_service_console(
+    name: str,
+    payload: dict[str, Any],
+    authorization: str | None = Header(default=None),
+) -> dict:
+    current_config = _load_authorized_config(authorization)
+    command = payload.get("command")
+    if not isinstance(command, str):
+        raise HTTPException(status_code=400, detail="console command must be a string")
+    try:
+        return services.send_console_command(
+            name,
+            command,
+            current_config["managed_apps"],
+            RUNTIME_DIR,
+        )
+    except services.ServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/services/{name}/{action}")
 def act_on_service(name: str, action: str, authorization: str | None = Header(default=None)) -> dict:
     current_config = _load_authorized_config(authorization)
