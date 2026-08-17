@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import venv
@@ -35,13 +36,41 @@ def _run_command(*parts: str | Path, capture_output: bool = False) -> subprocess
     )
 
 
+def _environment_is_healthy(environment: Path) -> bool:
+    python = _environment_python(environment)
+    if not (environment / "pyvenv.cfg").is_file() or not python.is_file():
+        return False
+
+    try:
+        check = subprocess.run(
+            [str(python), "-c", "import pip"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return False
+    return check.returncode == 0
+
+
+def _create_installer_environment(environment: Path) -> None:
+    if environment.exists():
+        print(f"Rebuilding damaged installer environment: {environment}")
+        shutil.rmtree(environment)
+    else:
+        print(f"Creating installer environment: {environment}")
+
+    venv.EnvBuilder(with_pip=True).create(environment)
+    if not _environment_is_healthy(environment):
+        raise RuntimeError(f"could not create a working installer environment at {environment}")
+
+
 def _ensure_pipx() -> Path:
     environment = _installer_environment()
-    python = _environment_python(environment)
-    if not python.is_file():
-        print(f"Creating installer environment: {environment}")
-        venv.EnvBuilder(with_pip=True).create(environment)
+    if not _environment_is_healthy(environment):
+        _create_installer_environment(environment)
 
+    python = _environment_python(environment)
     check = subprocess.run(
         [str(python), "-m", "pipx", "--version"],
         stdout=subprocess.DEVNULL,
