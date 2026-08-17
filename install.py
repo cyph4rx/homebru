@@ -16,9 +16,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 def _installer_environment() -> Path:
     if os.name == "nt":
-        data_root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-    else:
-        data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+        # Microsoft Store Python virtualizes LOCALAPPDATA, which breaks venv path validation.
+        return Path.home() / ".homebru" / "installer" / "pipx"
+
+    data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return data_root / "homebru" / "installer" / "pipx"
 
 

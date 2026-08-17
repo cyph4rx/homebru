@@ -6,6 +6,17 @@ import install
 
 
 class InstallerEnvironmentTests(unittest.TestCase):
+    def test_windows_environment_avoids_virtualized_local_app_data(self):
+        user_home = Path("C:/Users/test-user")
+        with (
+            patch.object(install.os, "name", "nt"),
+            patch.object(install.Path, "home", return_value=user_home),
+            patch.dict(install.os.environ, {"LOCALAPPDATA": "C:/virtualized"}),
+        ):
+            environment = install._installer_environment()
+
+        self.assertEqual(environment, user_home / ".homebru" / "installer" / "pipx")
+
     def test_environment_without_pyvenv_config_is_unhealthy(self):
         environment = MagicMock(spec=Path)
         config = MagicMock(spec=Path)

@@ -29,7 +29,7 @@ The installer only requires **Python 3.10** or newer.
 On Windows, run the shared Python installer by its full path from PowerShell:
 
 ```powershell
-py "D:\path\to\homebru\install.py"
+python "D:\path\to\homebru\install.py"
 ```
 
 On Linux or macOS, use the small shell launcher:
@@ -46,7 +46,7 @@ homebru
 ```
 
 To uninstall the command,
-run `py D:\path\to\homebru\install.py --uninstall` on Windows or
+run `python "D:\path\to\homebru\install.py" --uninstall` on Windows or
 `sh /path/to/homebru/install.sh --uninstall` on Linux and macOS.
 
 ### 2. Choose your setup inside Homebru
